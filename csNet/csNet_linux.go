@@ -1,6 +1,6 @@
 //go:build linux
 
-package scNet
+package csNet
 
 import (
 	"os"

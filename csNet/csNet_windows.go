@@ -1,6 +1,6 @@
 //go:build windows
 
-package scNet
+package csNet
 
 import (
 	"os"
@@ -20,7 +20,7 @@ func SetupFirewall(port string) {
 		return
 	}
 	exec.Command("netsh", "advfirewall", "firewall", "add", "rule",
-		"name=scNet P2P", "dir=in", "action=allow",
+		"name=csNet P2P", "dir=in", "action=allow",
 		"protocol=TCP", "localport="+port,
 	).Run()
 }
@@ -31,7 +31,7 @@ func CleanupFirewall(port string) {
 		return
 	}
 	exec.Command("netsh", "advfirewall", "firewall", "delete", "rule",
-		"name=scNet P2P").Run()
+		"name=csNet P2P").Run()
 }
 
 func isAdmin() bool {

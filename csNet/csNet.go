@@ -1,4 +1,4 @@
-package scNet
+package csNet
 
 import (
 	"bufio"
@@ -236,7 +236,7 @@ func (p *Peer) run() {
 			sc := bufio.NewScanner(conn)
 			for sc.Scan() {
 				text := sc.Text()
-				if text == "_SC_NET_PING_" {
+				if text == "_CS_NET_PING_" {
 					continue
 				}
 				netRecvCh <- text
@@ -251,7 +251,7 @@ func (p *Peer) run() {
 				select {
 				case <-ticker.C:
 					conn.SetWriteDeadline(time.Now().Add(p.cfg.HeartbeatTimeout))
-					if _, err := conn.Write([]byte("_SC_NET_PING_\n")); err != nil {
+					if _, err := conn.Write([]byte("_CS_NET_PING_\n")); err != nil {
 						conn.Close()
 						return
 					}

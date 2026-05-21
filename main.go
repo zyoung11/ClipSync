@@ -1,6 +1,9 @@
 package main
 
 import (
+	"clipsync/csNet"
+	"clipsync/result"
+	"clipsync/text"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -14,17 +17,13 @@ import (
 	"sync"
 	"syscall"
 	"time"
-
-	"sc/result"
-	"sc/scNet"
-	"sc/text"
 )
 
 const (
 	defaultPort      = "8890"
 	defaultMaxLength = 100
 	defaultMaxSize   = 3 * 1024 * 1024 // 3MB
-	configDirName    = ".config/sc"
+	configDirName    = ".config/cs"
 	configFileName   = "config.json"
 )
 
@@ -38,7 +37,7 @@ type Config struct {
 var (
 	config     Config
 	configPath string
-	peers      []*scNet.Peer
+	peers      []*csNet.Peer
 	peerLock   sync.RWMutex
 	lastSent   string
 	lastSentMu sync.RWMutex
@@ -47,7 +46,7 @@ var (
 )
 
 func main() {
-	scNet.Init()
+	csNet.Init()
 
 	if len(os.Args) > 1 {
 		command := os.Args[1]
@@ -70,9 +69,9 @@ func main() {
 
 func printHelp() {
 	helpText := `
-sc - 局域网剪切板共享工具
+clipsync - 局域网剪切板共享工具
 
-用法：sc [命令]
+用法：clipsync [命令]
 
 命令:
   run     启动剪切板共享服务
@@ -83,7 +82,7 @@ sc - 局域网剪切板共享工具
   -h, --help    显示帮助信息
 
 交互模式:
-  直接运行 sc 进入交互式菜单
+  直接运行 clipsync 进入交互式菜单
 `
 	fmt.Print(helpText)
 }
@@ -156,7 +155,6 @@ func handleRun() {
 			broadcastToPeers(content)
 		}
 	})
-
 	if err != nil {
 		log.Fatalf("启动剪切板监控失败: %v", err)
 	}
@@ -274,7 +272,7 @@ func initializePeers() {
 	defer peerLock.Unlock()
 
 	for _, ip := range config.IP {
-		cfg := scNet.Config{
+		cfg := csNet.Config{
 			PeerIP:            ip,
 			Port:              config.Port,
 			DialTimeout:       1 * time.Second,
@@ -284,7 +282,7 @@ func initializePeers() {
 			ReconnectDelay:    1 * time.Second,
 		}
 
-		peer := scNet.New(cfg)
+		peer := csNet.New(cfg)
 		peers = append(peers, peer)
 		fmt.Printf("正在连接设备 %s:%s...\n", ip, config.Port)
 	}
@@ -322,7 +320,7 @@ func shouldBroadcast(content string) bool {
 func startNetworkReceiver(recvCh chan string) {
 	for {
 		peerLock.RLock()
-		peerList := make([]*scNet.Peer, len(peers))
+		peerList := make([]*csNet.Peer, len(peers))
 		copy(peerList, peers)
 		peerLock.RUnlock()
 
