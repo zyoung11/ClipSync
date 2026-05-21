@@ -1,4 +1,4 @@
-module sc
+module clipsync
 
 go 1.26.2
 
