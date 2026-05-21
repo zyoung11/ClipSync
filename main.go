@@ -23,7 +23,7 @@ const (
 	defaultPort      = "8890"
 	defaultMaxLength = 100
 	defaultMaxSize   = 3 * 1024 * 1024 // 3MB
-	configDirName    = ".config/cs"
+	configDirName    = ".config/clipsync"
 	configFileName   = "config.json"
 )
 
