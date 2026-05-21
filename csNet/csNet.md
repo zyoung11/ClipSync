@@ -1,8 +1,8 @@
 
 
-# scNet 开发文档
+# csNet 开发文档
 
-`scNet` 是一个专为局域网双端节点设计的极简、高可用 P2P 通信底层库。它将复杂的网络重连、心跳保活、连接冲突仲裁等细节彻底封装，对外只暴露纯粹的“发送”与“接收”，让你可以用写单机代码的心态写局域网联动程序。
+`csNet` 是一个专为局域网双端节点设计的极简、高可用 P2P 通信底层库。它将复杂的网络重连、心跳保活、连接冲突仲裁等细节彻底封装，对外只暴露纯粹的“发送”与“接收”，让你可以用写单机代码的心态写局域网联动程序。
 
 ## ✨ 核心特性
 
@@ -18,10 +18,10 @@
 
 ### 1. 引入库
 
-将 `scNet` 文件夹放入你的项目目录，假设你的 `go.mod` 叫 `myapp`：
+将 `csNet` 文件夹放入你的项目目录，假设你的 `go.mod` 叫 `myapp`：
 
 ```go
-import "myapp/scNet"
+import "myapp/csNet"
 ```
 
 ### 2. 最小化示例
@@ -32,18 +32,18 @@ import "myapp/scNet"
 package main
 import (
     "fmt"
-    "myapp/scNet"
+    "myapp/csNet"
 )
 func main() {
     // 1. 初始化平台底层（处理Windows乱码、Linux崩溃信号等，建议调用一次）
-    scNet.Init()
+    csNet.Init()
     // 2. 配置参数
-    cfg := scNet.Config{
+    cfg := csNet.Config{
         PeerIP: "192.168.1.100", // 对方IP
         Port:   "9527",          // 通信端口（两端必须一致）
     }
     // 3. 创建实例（非阻塞，后台自动开始拨号/监听/心跳）
-    peer := scNet.New(cfg)
+    peer := csNet.New(cfg)
     defer peer.Close() // 程序退出时清理资源
     // 4. 阻塞等待首次连接成功
     <-peer.Connected
@@ -66,12 +66,12 @@ func main() {
 
 ## 📖 API 参考
 
-### `scNet.Init()`
+### `csNet.Init()`
 
 初始化运行环境。在 Windows 上会自动设置控制台为 UTF-8 编码，在 Linux 上会屏蔽 `SIGPIPE` 导致的程序崩溃。
 **建议**：在 `main` 函数入口处调用一次即可。
 
-### `scNet.Config` 结构体
+### `csNet.Config` 结构体
 
 创建连接时需要传入的配置项，时间参数均可选（不填则使用合理的默认值）：
 | 字段 | 类型 | 说明 | 默认值 |
@@ -84,7 +84,7 @@ func main() {
 | `HeartbeatTimeout` | `time.Duration`| 心跳包写入超时（超时即判定断线）| `3s` |
 | `ReconnectDelay` | `time.Duration`| 断线后重新发起连接的间隔 | `1s` |
 
-### `scNet.New(cfg Config) *Peer`
+### `csNet.New(cfg Config) *Peer`
 
 创建并启动一个 P2P 网络实例。此函数是非阻塞的，调用后会在后台自动开启连接竞速。
 
@@ -106,7 +106,7 @@ func main() {
 
 彻底关闭底层网络，释放所有协程和端口占用。
 
-### `scNet.SetupFirewall(port string)` / `scNet.CleanupFirewall(port string)`
+### `csNet.SetupFirewall(port string)` / `csNet.CleanupFirewall(port string)`
 
 **仅 Windows 有效**。尝试通过 `netsh` 添加/删除防火墙入站规则。如果当前终端没有管理员权限，函数会静默跳过，不会报错。
 ---
@@ -118,7 +118,7 @@ func main() {
 ### 1. 丢弃策略的真实意图
 
 为什么积压超过 100 条要丢掉旧数据，而不是无限缓存？
-在局域网联动（如同步鼠标位置、游戏帧数据）场景中，如果断网了 10 秒，积压了 1000 条坐标数据，重连后把这 1000 条发给对方是没有意义的（对方只需要最新的坐标）。`scNet` 的策略是：**尽最大努力保留最近的状态，绝不拖慢调用方的节奏**。
+在局域网联动（如同步鼠标位置、游戏帧数据）场景中，如果断网了 10 秒，积压了 1000 条坐标数据，重连后把这 1000 条发给对方是没有意义的（对方只需要最新的坐标）。`csNet` 的策略是：**尽最大努力保留最近的状态，绝不拖慢调用方的节奏**。
 
 ### 2. 断线重连时的“抢救”机制
 
