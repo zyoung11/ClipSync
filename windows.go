@@ -67,6 +67,11 @@ func handleAutostart() {
 		}
 		os.Remove(vbsPath)
 		fmt.Println("已删除开机自启动任务")
+
+		kill := exec.Command("taskkill", "/IM", "clipsync.exe", "/F")
+		kill.Stdout = os.Stdout
+		kill.Stderr = os.Stderr
+		kill.Run()
 	} else {
 		vbsContent := fmt.Sprintf("CreateObject(\"WScript.Shell\").Run \"%s run\", 0, False", exePath)
 		if err := os.WriteFile(vbsPath, []byte(vbsContent), 0644); err != nil {
@@ -86,6 +91,15 @@ func handleAutostart() {
 			fmt.Printf("创建自启动任务失败: %v\n", err)
 			return
 		}
-		fmt.Println("已创建开机自启动任务（后台静默运行，无窗口）")
+		fmt.Println("已创建开机自启动任务，正在启动服务...")
+
+		startCmd := exec.Command(exePath, "run")
+		startCmd.Stdout = nil
+		startCmd.Stderr = nil
+		if err := startCmd.Start(); err != nil {
+			fmt.Printf("启动服务失败: %v\n", err)
+		} else {
+			fmt.Println("服务已在后台运行")
+		}
 	}
 }
