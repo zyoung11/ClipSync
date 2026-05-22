@@ -265,6 +265,18 @@ func handleAutostart() {
 		exec.Command("systemctl", "--user", "daemon-reload").Run()
 		fmt.Println("已删除开机自启动服务")
 	} else {
+		// 从当前环境捕获显示相关的环境变量
+		waylandDisplay := os.Getenv("WAYLAND_DISPLAY")
+		display := os.Getenv("DISPLAY")
+
+		var envLines string
+		if waylandDisplay != "" {
+			envLines += "Environment=WAYLAND_DISPLAY=" + waylandDisplay + "\n"
+		}
+		if display != "" {
+			envLines += "Environment=DISPLAY=" + display + "\n"
+		}
+
 		// 创建 systemd user service 文件
 		serviceContent := `[Unit]
 Description=ClipSync - LAN Clipboard Sync
@@ -278,9 +290,7 @@ ExecStartPre=/bin/sleep 15
 ExecStart=` + exePath + ` run
 Restart=on-failure
 RestartSec=10
-Environment=WAYLAND_DISPLAY=wayland-0
-Environment=DISPLAY=:0
-
+` + envLines + `
 [Install]
 WantedBy=default.target
 `
