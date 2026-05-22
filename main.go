@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
@@ -162,8 +161,12 @@ func handleRun() {
 		}
 	})
 	if err != nil {
-		log.Fatalf("启动剪切板监控失败: %v", err)
+		fmt.Printf("警告: 启动剪切板监控失败: %v\n", err)
+		fmt.Println("将以仅接收模式运行，按 Ctrl+C 退出")
 	}
+
+	// Block until interrupted
+	<-ctx.Done()
 }
 
 func handleDelete() {
@@ -235,7 +238,7 @@ func loadConfig() {
 		return
 	}
 
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		log.Fatal("读取配置文件失败:", err)
 	}
@@ -268,7 +271,7 @@ func saveConfig() {
 		log.Fatal("序列化配置失败:", err)
 	}
 
-	if err := ioutil.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, 0644); err != nil {
 		log.Fatal("保存配置文件失败:", err)
 	}
 }

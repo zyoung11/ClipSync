@@ -79,10 +79,19 @@ func checkClipboardManager() bool {
 }
 
 func startClipboardMonitor(ctx context.Context, callback func(content string)) error {
-	detectClipboardTools()
+	// 重试检测，直到剪贴板工具可用或上下文取消
+	for {
+		detectClipboardTools()
+		if defaultTool != nil {
+			break
+		}
 
-	if defaultTool == nil {
-		return fmt.Errorf("未找到可用的剪切板工具")
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(3 * time.Second):
+			fmt.Println("等待剪贴板工具就绪...")
+		}
 	}
 
 	fmt.Printf("使用剪切板工具: %s\n", defaultTool.name)
@@ -259,15 +268,18 @@ func handleAutostart() {
 		// 创建 systemd user service 文件
 		serviceContent := `[Unit]
 Description=ClipSync - LAN Clipboard Sync
-After=graphical-session.target network-online.target
+After=network-online.target graphical-session.target
 Wants=network-online.target
+PartOf=graphical-session.target
 
 [Service]
 Type=simple
-ExecStartPre=/bin/sleep 5
+ExecStartPre=/bin/sleep 15
 ExecStart=` + exePath + ` run
 Restart=on-failure
-RestartSec=5
+RestartSec=10
+Environment=WAYLAND_DISPLAY=wayland-0
+Environment=DISPLAY=:0
 
 [Install]
 WantedBy=default.target
