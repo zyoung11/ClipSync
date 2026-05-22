@@ -223,3 +223,7 @@ func writeToClipboard(content string) error {
 
 	return nil
 }
+
+func handleAutostart() {
+	fmt.Println("Linux 不支持此命令")
+}

@@ -55,6 +55,8 @@ func main() {
 			handleRun()
 		case "delete":
 			handleDelete()
+		case "autostart":
+			handleAutostart()
 		case "help", "-h", "--help", "-help":
 			printHelp()
 		default:
@@ -74,9 +76,10 @@ clipsync - 局域网剪切板共享工具
 用法：clipsync [命令]
 
 命令:
-  run     启动剪切板共享服务
-  delete  删除配置文件
-  help    显示此帮助信息
+  run       启动剪切板共享服务
+  autostart 创建/删除开机自启动任务（仅 Windows）
+  delete    删除配置文件
+  help      显示此帮助信息
 
 选项:
   -h, --help    显示帮助信息
@@ -91,10 +94,11 @@ func showInteractiveMenu() {
 	config := result.RadioConfig{
 		Question: "请选择要执行的操作:",
 		Options: []string{
-			"run      - 启动剪切板共享服务",
-			"delete   - 删除配置文件",
-			"help     - 显示帮助信息",
-			"exit     - 退出程序",
+			"run       - 启动剪切板共享服务",
+			"autostart - 创建/删除开机自启动任务",
+			"delete    - 删除配置文件",
+			"help      - 显示帮助信息",
+			"exit      - 退出程序",
 		},
 	}
 
@@ -103,6 +107,8 @@ func showInteractiveMenu() {
 	switch {
 	case strings.Contains(choice, "run"):
 		handleRun()
+	case strings.Contains(choice, "autostart"):
+		handleAutostart()
 	case strings.Contains(choice, "delete"):
 		handleDelete()
 	case strings.Contains(choice, "help"):
