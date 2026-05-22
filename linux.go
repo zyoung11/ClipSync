@@ -259,13 +259,15 @@ func handleAutostart() {
 		// 创建 systemd user service 文件
 		serviceContent := `[Unit]
 Description=ClipSync - LAN Clipboard Sync
-After=graphical-session.target
+After=graphical-session.target network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
+ExecStartPre=/bin/sleep 5
 ExecStart=` + exePath + ` run
 Restart=on-failure
-RestartSec=3
+RestartSec=5
 
 [Install]
 WantedBy=default.target
