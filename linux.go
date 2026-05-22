@@ -5,7 +5,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -225,5 +227,62 @@ func writeToClipboard(content string) error {
 }
 
 func handleAutostart() {
-	fmt.Println("Linux 不支持此命令")
+	exePath, err := os.Executable()
+	if err != nil {
+		fmt.Printf("获取程序路径失败: %v\n", err)
+		return
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Printf("获取用户主目录失败: %v\n", err)
+		return
+	}
+
+	serviceDir := filepath.Join(home, ".config", "systemd", "user")
+	servicePath := filepath.Join(serviceDir, "clipsync.service")
+	serviceName := "clipsync"
+
+	// 通过 systemctl 检查服务是否存在且已启用
+	check := exec.Command("systemctl", "--user", "is-enabled", serviceName)
+	output, err := check.CombinedOutput()
+	enabled := err == nil && strings.TrimSpace(string(output)) == "enabled"
+
+	if enabled {
+		// 已启用 → 停用 + 删除
+		exec.Command("systemctl", "--user", "stop", serviceName).Run()
+		exec.Command("systemctl", "--user", "disable", serviceName).Run()
+		os.Remove(servicePath)
+		exec.Command("systemctl", "--user", "daemon-reload").Run()
+		fmt.Println("已删除开机自启动服务")
+	} else {
+		// 创建 systemd user service 文件
+		serviceContent := `[Unit]
+Description=ClipSync - LAN Clipboard Sync
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=` + exePath + ` run
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target
+`
+
+		if err := os.MkdirAll(serviceDir, 0755); err != nil {
+			fmt.Printf("创建服务目录失败: %v\n", err)
+			return
+		}
+		if err := os.WriteFile(servicePath, []byte(serviceContent), 0644); err != nil {
+			fmt.Printf("创建服务文件失败: %v\n", err)
+			return
+		}
+
+		exec.Command("systemctl", "--user", "daemon-reload").Run()
+		exec.Command("systemctl", "--user", "enable", serviceName).Run()
+		exec.Command("systemctl", "--user", "start", serviceName).Run()
+		fmt.Println("已创建开机自启动服务（后台静默运行）")
+	}
 }
