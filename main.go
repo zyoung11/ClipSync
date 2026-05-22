@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"os/signal"
 	"os/user"
 	"path/filepath"
@@ -24,6 +25,7 @@ const (
 	defaultMaxSize   = 3 * 1024 * 1024 // 3MB
 	configDirName    = ".config/clipsync"
 	configFileName   = "config.json"
+	logFileName      = "clipsync.log"
 )
 
 type Config struct {
@@ -42,6 +44,8 @@ var (
 	lastSentMu sync.RWMutex
 	lastRecv   string
 	lastRecvMu sync.RWMutex
+	logFile    *os.File
+	logMu      sync.Mutex
 )
 
 func main() {
@@ -52,6 +56,9 @@ func main() {
 		switch command {
 		case "run":
 			handleRun()
+		case "log":
+			follow := len(os.Args) > 2 && (os.Args[2] == "-f" || os.Args[2] == "--follow")
+			handleLog(follow)
 		case "delete":
 			handleDelete()
 		case "autostart":
@@ -77,10 +84,12 @@ clipsync - 局域网剪切板共享工具
 命令:
   run       启动剪切板共享服务
   autostart 创建/删除开机自启动任务（仅 Windows）
+  log       查看服务运行日志（加 -f 实时跟踪）
   delete    删除配置文件
   help      显示此帮助信息
 
 选项:
+  -f        与 log 搭配使用，实时跟踪日志输出
   -h, --help    显示帮助信息
 
 交互模式:
@@ -95,6 +104,7 @@ func showInteractiveMenu() {
 		Options: []string{
 			"run       - 启动剪切板共享服务",
 			"autostart - 创建/删除开机自启动任务",
+			"log       - 查看服务运行日志",
 			"delete    - 删除配置文件",
 			"help      - 显示帮助信息",
 			"exit      - 退出程序",
@@ -108,6 +118,8 @@ func showInteractiveMenu() {
 		handleRun()
 	case strings.Contains(choice, "autostart"):
 		handleAutostart()
+	case strings.Contains(choice, "log"):
+		handleLog(false)
 	case strings.Contains(choice, "delete"):
 		handleDelete()
 	case strings.Contains(choice, "help"):
@@ -119,14 +131,15 @@ func showInteractiveMenu() {
 
 func handleRun() {
 	loadConfig()
+	initLogging()
 
 	if len(config.IP) == 0 {
-		fmt.Println("配置文件中没有IP地址，需要初始化配置")
+		logPrintln("配置文件中没有IP地址，需要初始化配置")
 		initConfig()
 	}
 
-	fmt.Printf("启动剪切板共享服务 (端口: %s)\n", config.Port)
-	fmt.Printf("共享设备: %v\n", config.IP)
+	logPrintf("启动剪切板共享服务 (端口: %s)\n", config.Port)
+	logPrintf("共享设备: %v\n", config.IP)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -136,6 +149,7 @@ func handleRun() {
 	go func() {
 		<-sigCh
 		fmt.Println("\n正在停止服务...")
+		logPrintln("正在停止服务...")
 		cancel()
 		time.Sleep(100 * time.Millisecond)
 		os.Exit(0)
@@ -147,13 +161,13 @@ func handleRun() {
 		for _, peer := range peers {
 			<-peer.Connected
 		}
-		fmt.Println("所有设备连接已建立！")
+		logPrintln("所有设备连接已建立！")
 	}()
 
 	recvCh := make(chan string, 100)
 	go startNetworkReceiver(recvCh)
 
-	fmt.Println("剪切板监控已启动，按 Ctrl+C 退出")
+	logPrintln("剪切板监控已启动，按 Ctrl+C 退出")
 
 	err := startClipboardMonitor(ctx, func(content string) {
 		if shouldBroadcast(content) {
@@ -161,8 +175,8 @@ func handleRun() {
 		}
 	})
 	if err != nil {
-		fmt.Printf("警告: 启动剪切板监控失败: %v\n", err)
-		fmt.Println("将以仅接收模式运行，按 Ctrl+C 退出")
+		logPrintf("警告: 启动剪切板监控失败: %v\n", err)
+		logPrintln("将以仅接收模式运行，按 Ctrl+C 退出")
 	}
 
 	// Block until interrupted
@@ -293,13 +307,13 @@ func initializePeers() {
 
 		peer := csNet.New(cfg)
 		peers = append(peers, peer)
-		fmt.Printf("正在连接设备 %s:%s...\n", ip, config.Port)
+		logPrintf("正在连接设备 %s:%s...\n", ip, config.Port)
 	}
 }
 
 func broadcastToPeers(content string) {
 	if len(content) > config.MaxSize {
-		fmt.Printf("内容大小超过限制 (%d > %d)，跳过发送\n", len(content), config.MaxSize)
+		logPrintf("内容大小超过限制 (%d > %d)，跳过发送\n", len(content), config.MaxSize)
 		return
 	}
 
@@ -367,7 +381,7 @@ func handleReceivedMessage(content string) {
 	lastRecvMu.Unlock()
 
 	writeToClipboard(content)
-	fmt.Printf("收到剪切板内容 (%d bytes)\n", len(content))
+	logPrintf("收到剪切板内容 (%d bytes)\n", len(content))
 }
 
 func cleanupConfig() {
@@ -378,5 +392,155 @@ func cleanupConfig() {
 		fmt.Printf("删除配置目录失败: %v\n", err)
 	} else {
 		fmt.Println("配置目录已删除")
+	}
+}
+
+func initLogging() {
+	logDir := filepath.Dir(getConfigPath())
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		return
+	}
+	f, err := os.OpenFile(filepath.Join(logDir, logFileName), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	logFile = f
+}
+
+func logPrintf(format string, a ...interface{}) {
+	msg := fmt.Sprintf(format, a...)
+	fmt.Print(msg)
+	writeLog(msg)
+}
+
+func logPrintln(a ...interface{}) {
+	msg := fmt.Sprintln(a...)
+	fmt.Print(msg)
+	writeLog(msg)
+}
+
+func writeLog(msg string) {
+	clean := strings.TrimSpace(msg)
+	if clean == "" {
+		return
+	}
+	logMu.Lock()
+	defer logMu.Unlock()
+	if logFile != nil {
+		ts := time.Now().Format("2006-01-02 15:04:05")
+		fmt.Fprintf(logFile, "[%s] %s\n", ts, clean)
+	}
+}
+
+func isServiceRunning() bool {
+	exe, _ := os.Executable()
+	name := filepath.Base(exe)
+	myPid := os.Getpid()
+
+	// Linux: pgrep -x <name> 返回 PID 列表
+	output, err := exec.Command("pgrep", "-x", name).Output()
+	if err == nil {
+		for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+			if line == "" {
+				continue
+			}
+			pid := 0
+			fmt.Sscanf(line, "%d", &pid)
+			if pid != 0 && pid != myPid {
+				return true
+			}
+		}
+	}
+
+	// Windows: tasklist /NH /FI /FO CSV
+	output, err = exec.Command("tasklist", "/NH", "/FI",
+		fmt.Sprintf("IMAGENAME eq %s", name),
+		"/FO", "CSV").Output()
+	if err == nil {
+		for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+			parts := strings.Split(line, ",")
+			if len(parts) < 2 {
+				continue
+			}
+			pidStr := strings.Trim(parts[1], "\"")
+			pid := 0
+			fmt.Sscanf(pidStr, "%d", &pid)
+			if pid != 0 && pid != myPid {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func handleLog(follow bool) {
+	// 先显示服务运行状态
+	if isServiceRunning() {
+		fmt.Println("服务状态: 🟢 运行中\n")
+	} else {
+		fmt.Println("服务状态: 🔴 未运行\n")
+	}
+
+	logPath := filepath.Join(filepath.Dir(getConfigPath()), logFileName)
+
+	f, err := os.Open(logPath)
+	if err != nil {
+		fmt.Printf("暂无日志，服务可能尚未启动 (%v)\n", err)
+		return
+	}
+	defer f.Close()
+
+	// 读末尾最多 50 行
+	const maxLines = 50
+	stat, _ := f.Stat()
+	if stat.Size() == 0 {
+		if !follow {
+			return
+		}
+	}
+
+	var start int64 = 0
+	if stat.Size() > 4096 {
+		start = stat.Size() - 4096
+	}
+	buf := make([]byte, stat.Size()-start)
+	f.ReadAt(buf, start)
+	lines := strings.Split(strings.TrimRight(string(buf), "\n"), "\n")
+	if len(lines) > maxLines {
+		lines = lines[len(lines)-maxLines:]
+	}
+	for _, line := range lines {
+		fmt.Println(line)
+	}
+
+	if !follow {
+		return
+	}
+
+	// Follow 模式：轮询文件追加内容
+	fmt.Println("\n等待新日志... (Ctrl+C 退出)")
+	f.Seek(0, 2) // 移到末尾
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
+
+	for {
+		select {
+		case <-sigCh:
+			fmt.Println()
+			return
+		case <-ticker.C:
+			cur, _ := f.Stat()
+			if cur.Size() > stat.Size() {
+				data := make([]byte, cur.Size()-stat.Size())
+				f.Read(data)
+				fmt.Print(string(data))
+				stat = cur
+			}
+		}
 	}
 }

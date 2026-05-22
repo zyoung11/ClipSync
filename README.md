@@ -54,6 +54,7 @@ clipsync
 ```bash
 clipsync run        # 启动剪切板共享服务
 clipsync autostart  # 切换开机自启（注册/取消）
+clipsync log        # 查看服务运行日志
 clipsync delete     # 删除配置文件
 clipsync help       # 显示帮助信息
 ```
@@ -120,6 +121,34 @@ IP地址: 192.168.1.101,192.168.1.102
 
 > **注意：** Linux 下 systemd user service 在图形会话启动后延迟 15 秒启动，以确保剪切板工具就绪。
 
+### `log` — 查看运行日志
+
+查看服务运行日志，方便你排查问题或查看运行状态。
+
+**静态查看**（显示最近 50 条）：
+```bash
+clipsync log
+```
+
+**实时跟踪**（类似 `tail -f`）：
+```bash
+clipsync log -f
+```
+
+按 `Ctrl + C` 退出实时跟踪。
+
+日志文件位置：`~/.config/clipsync/clipsync.log`
+
+示例输出：
+```
+[2026-05-22 15:30:01] 启动剪切板共享服务 (端口: 8890)
+[2026-05-22 15:30:01] 共享设备: [192.168.1.101]
+[2026-05-22 15:30:01] 正在连接设备 192.168.1.101:8890...
+[2026-05-22 15:30:02] 所有设备连接已建立！
+[2026-05-22 15:30:02] 剪切板监控已启动，按 Ctrl+C 退出
+[2026-05-22 15:30:15] 收到剪切板内容 (42 bytes)
+```
+
 ### `delete` — 删除配置
 
 删除整个配置目录 `~/.config/clipsync/`。
@@ -163,6 +192,11 @@ netsh advfirewall firewall add rule name="ClipSync" dir=in action=allow protocol
 ## 常见问题
 
 ### 如何检查服务是否正常运行？
+
+**查看日志：**
+```bash
+clipsync log
+```
 
 **查看进程：**
 ```bash
